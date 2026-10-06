@@ -334,14 +334,24 @@ fn configure_notification_window(window: &tauri::WebviewWindow) {
 }
 
 fn show_notification(app: &AppHandle) {
-    // 既存の通知があれば閉じる
-    if let Some(existing) = app.get_webview_window("notification") {
-        let _ = existing.close();
+    let state = app.state::<AppState>();
+    let seq = {
+        let mut timer = state.timer.lock().unwrap();
+        timer.notification_seq += 1;
+        timer.notification_seq
+    };
+
+    // 既存の通知があれば閉じる。close は非同期なので、新しいウィンドウは連番ラベルにする
+    for (label, existing) in app.webview_windows() {
+        if label.starts_with("notification") {
+            let _ = existing.close();
+        }
     }
+    let label = format!("notification-{seq}");
 
     let Ok(window) = WebviewWindowBuilder::new(
         app,
-        "notification",
+        label,
         WebviewUrl::App("notification.html".into()),
     )
     .title("")
@@ -374,20 +384,16 @@ fn show_notification(app: &AppHandle) {
     configure_notification_window(&window);
 
     // 6秒後に自動で閉じる（その間に新しい通知が出ていれば閉じない）
-    let state = app.state::<AppState>();
-    let seq = {
-        let mut timer = state.timer.lock().unwrap();
-        timer.notification_seq += 1;
-        timer.notification_seq
-    };
     let app_handle = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(6));
         let state = app_handle.state::<AppState>();
         let current = state.timer.lock().unwrap().notification_seq;
         if current == seq {
-            if let Some(w) = app_handle.get_webview_window("notification") {
-                let _ = w.close();
+            for (label, w) in app_handle.webview_windows() {
+                if label.starts_with("notification") {
+                    let _ = w.close();
+                }
             }
         }
     });
