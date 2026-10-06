@@ -482,7 +482,7 @@ struct ContentView: View {
                 Text("変更中のタイマーはリセットされます。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("バージョン 2.9")
+                Text("バージョン \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "開発版")")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 HStack {

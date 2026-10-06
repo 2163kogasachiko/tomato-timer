@@ -8,6 +8,14 @@ fi
 
 repo_dir="${0:A:h}"
 photo_path="${1:A}"
+
+version="$(git -C "$repo_dir" describe --tags --match 'v*' --abbrev=0 2>/dev/null || true)"
+version="${version#v}"
+if [[ -z "$version" ]]; then
+  echo "git タグが見つからないため、仮のバージョン 0.0 でビルドします。リリースには vX.Y 形式のタグを打ってください。" >&2
+  version="0.0"
+fi
+build_number="$(date +%Y%m%d%H%M)"
 build_dir="$repo_dir/dist"
 temp_dir="$(mktemp -d /private/tmp/tomato-build.XXXXXX)"
 trap 'rm -rf "$temp_dir"' EXIT
@@ -39,7 +47,7 @@ PY
 
 cp "$repo_dir"/timer-*.wav "$resources/"
 
-cat > "$app_path/Contents/Info.plist" <<'PLIST'
+cat > "$app_path/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -51,8 +59,8 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TomatoTimer</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>2.9</string>
-<key>CFBundleVersion</key><string>20</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
+<key>CFBundleVersion</key><string>${build_number}</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
@@ -71,5 +79,5 @@ lipo -create "$temp_dir"/TomatoTimer-arm64 "$temp_dir"/TomatoTimer-x86_64 \
   -output "$app_path/Contents/MacOS/TomatoTimer"
 
 codesign --force --deep --sign - "$app_path"
-ditto -c -k --sequesterRsrc --keepParent "$app_path" "$build_dir/TomatoTimer-Mac-v2.9.zip"
-echo "完成: $build_dir/TomatoTimer-Mac-v2.9.zip"
+ditto -c -k --sequesterRsrc --keepParent "$app_path" "$build_dir/TomatoTimer-Mac-v${version}.zip"
+echo "完成: $build_dir/TomatoTimer-Mac-v${version}.zip"

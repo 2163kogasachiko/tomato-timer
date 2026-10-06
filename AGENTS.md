@@ -46,10 +46,7 @@ macOS 13以降、Xcode Command Line Tools、Python 3、Pillowが必要です。
 
 - 仕様が変わる変更では、`REQUIREMENT.md` も同じコミットで更新してください。
 - 通知音を追加・変更するときは、wav ファイルと `TimerModel.SoundChoice` の両方を揃えてください。`build-mac.sh` は `timer-*.wav` をまとめてコピーします。
-- バージョンを上げるときは、次の箇所を揃えて変更してください。
-  - `build-mac.sh` の `CFBundleShortVersionString`、`CFBundleVersion`、zip ファイル名
-  - `TomatoTimer.swift` の設定画面のバージョン表示
-  - `README.md` のダウンロード名と出力先
+- バージョンは git タグ（`vX.Y` 形式、GitHub Releases と対応）で管理します。リリース時はタグを打ってから `build-mac.sh` を実行してください。`CFBundleShortVersionString` と zip ファイル名はタグから、`CFBundleVersion` はビルド時刻から自動生成され、設定画面の表示は `Info.plist` から読むため、ソースやスクリプトを手で書き換える箇所はありません。
 - 対応する最低OSを変えるときは、`build-mac.sh` の `min_macos` と `LSMinimumSystemVersion`、`README.md`、`REQUIREMENT.md` を揃えてください。
 - ビルド後は `vtool -show-build` で、両方のアーキテクチャの `minos` が対応OSになっているか確認してください。
 

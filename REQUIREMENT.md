@@ -116,10 +116,7 @@
 - `TomatoTimer.app`（バンドルID `com.codex.tomatotimer`、arm64 と x86_64 の Universal、最低OS macOS 13、アドホック署名）
 - `dist/TomatoTimer-Mac-v<バージョン>.zip`
 
+バージョン番号は GitHub Releases に対応する git タグ（`v2.9` など）が正です。`build-mac.sh` がタグから `CFBundleShortVersionString` と zip ファイル名を決め、`CFBundleVersion` にはビルド時刻（`YYYYMMDDhhmm`）を入れます。設定画面のバージョン表示は `Info.plist` から読み込みます。
+
 トマト画像（Adobe Stock、アセットID 577240549）はリポジトリに含めません。ビルド時に指定した画像を中央で正方形に切り抜き、1254×1254 に縮小して `tomato-cutout.png` と `TomatoTimer.icns` を作ります。
 
-## 既知の課題
-
-現時点の実装で気になっている点です。仕様として決めたものではありません。
-
-- バージョン番号が `build-mac.sh` と `TomatoTimer.swift` の設定画面の両方に直接書かれています。

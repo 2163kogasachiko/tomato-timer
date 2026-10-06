@@ -4,7 +4,7 @@
 
 ## ダウンロード
 
-Mac版アプリは、このリポジトリの **Releases** から `TomatoTimer-Mac-v2.9.zip` をダウンロードしてください。ZIPを展開して `TomatoTimer.app` を開きます。
+Mac版アプリは、このリポジトリの **Releases** にある最新リリースの `TomatoTimer-Mac-vX.Y.zip` をダウンロードしてください。ZIPを展開して `TomatoTimer.app` を開きます。
 
 ## 主な機能
 
@@ -23,7 +23,7 @@ python3 -m pip install Pillow
 ./build-mac.sh /path/to/licensed-tomato.png
 ```
 
-完成品は `dist/TomatoTimer-Mac-v2.9.zip` に出力されます。
+完成品は `dist/TomatoTimer-Mac-vX.Y.zip` に出力されます。バージョン番号は git タグ（`v2.9` など）から自動で決まるので、リリース前にタグを打ってください。
 
 ## 画像について
 
