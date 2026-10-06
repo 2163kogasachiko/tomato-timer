@@ -553,6 +553,7 @@ struct WindowConfigurator: NSViewRepresentable {
         guard let window else { return }
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.hasShadow = false
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = false
