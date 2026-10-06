@@ -32,7 +32,13 @@ Windows では Rust（rustup）と Node.js が必要です。WebView2 は Window
 
 - `tomato-timer-tauri-windows-exe` — 単体 exe（未署名のため SmartScreen が出ます。「詳細情報」→「実行」）
 - `tomato-timer-tauri-windows-nsis` — NSIS インストーラー
-- `tomato-timer-tauri-macos-dmg` — macOS 用 dmg（Apple Silicon、未署名なので右クリック→開く）
+- `tomato-timer-tauri-macos-dmg` — macOS 用 dmg（Apple Silicon）
+
+macOS 版は未署名のため、ブラウザでダウンロードした dmg から起動すると「壊れているため開けません」と出ます。対処は次のどれかです。
+
+- `.app` をデスクトップ等にコピーしたあと `xattr -dr com.apple.quarantine <.appのパス>` を実行
+- `gh run download` や `curl` など CLI でダウンロードする（quarantine が付かず、そのまま開けます）
+- `npm run build` でローカルビルドする
 
 ## Windows で確認したいこと
 
