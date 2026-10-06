@@ -1,0 +1,7 @@
+.DS_Store
+dist/
+.build/
+*.app/
+*.zip
+tomato-cutout.png
+TomatoTimer.icns
