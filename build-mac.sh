@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 1 || ! -f "$1" ]]; then
-  echo "使い方: ./scripts/build-mac.sh /path/to/licensed-tomato.png" >&2
+  echo "使い方: ./build-mac.sh /path/to/licensed-tomato.png" >&2
   exit 1
 fi
 
