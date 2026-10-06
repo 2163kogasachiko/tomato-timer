@@ -33,13 +33,25 @@ npm run build                 # リリースビルド
 - 配布ビルドは `./build-release.sh /path/to/licensed-tomato.png`（画像→アイコン→`npm run build`、version と git タグの一致も確認）
 - `tomato.png` が無い場合は表示側が仮画像にフォールバックします
 
-## CI
+## CI とリリース
 
-`.github/workflows/tauri-build.yml` が `main` / `feat/**` への push で Windows（単体exe・NSIS）と macOS（dmg）をビルドします。仮画像入り・未署名の検証用ビルドで、配布には使いません。
+`.github/workflows/tauri-build.yml` が `main` / `feat/**` への push で Windows（単体exe・NSIS）と macOS（dmg）をビルドします。
 
 - `tomato-timer-windows-exe` — 単体 exe（SmartScreen →「詳細情報」→「実行」）
 - `tomato-timer-windows-nsis` — NSIS インストーラー
 - `tomato-timer-macos-dmg` — macOS dmg（Apple Silicon）
+
+### GitHub Release
+
+`vX.Y` 形式のタグを push すると、両 OS のビルド成功後に GitHub Release `TomatoTimer vX.Y` が自動作成され、単体 exe・NSIS インストーラー・dmg が添付されます。リリースノートは直前の `v*` タグからのコミット一覧から自動生成されます。
+
+```bash
+# src-tauri/tauri.conf.json の version を上げてコミットしてから
+git tag v0.2.0
+git push fork v0.2.0   # リリースはタグをpushしたリポジトリに作られます
+```
+
+タグ名と `tauri.conf.json` の `version` が一致しない場合、ビルドは冒頭で失敗します。成果物は仮画像入り・未署名です。許諾画像で作りたい場合はローカルで `./build-release.sh /path/to/image.png` を使い、`gh release upload` でアセットを差し替えてください。
 
 macOS 版は未署名のため、ブラウザでダウンロードした dmg から起動すると「壊れているため開けません」と出ます。対処は次のどれかです。
 

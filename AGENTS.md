@@ -74,7 +74,8 @@ macOS 13以降、Xcode Command Line Tools、Python 3、Pillowが必要です。
 
 - 仕様が変わる変更では、`REQUIREMENT.md` も同じコミットで更新してください。
 - 通知音を追加・変更するときは、wav ファイルと `TimerModel.SoundChoice` の両方を揃えてください。`build-mac.sh` は `timer-*.wav` をまとめてコピーします。
-- バージョンは git タグ（`vX.Y` 形式、GitHub Releases と対応）が正です。Tauri 版は `tauri/src-tauri/tauri.conf.json` の `version` をタグに合わせてコミットします（`build-release.sh` が一致を確認します）。旧 `build-mac.sh` はタグから `Info.plist` と zip 名を自動生成します。
+- バージョンは git タグ（`vX.Y.Z` 形式、GitHub Releases と対応）が正です。**リリース時は必ずタグを打ってください**（`v*` タグの push で CI が GitHub Release を自動作成します）。Tauri 版は `tauri/src-tauri/tauri.conf.json` の `version` をタグに合わせてコミットします（CI と `build-release.sh` が一致を確認します）。旧 `build-mac.sh` はタグから `Info.plist` と zip 名を自動生成します。
+- 採番ルール：大幅な機能追加は `Y` を上げます（例 `v0.1.0` → `v0.2.0`）、小規模な修正は `Z` を上げます（例 `v0.2.0` → `v0.2.1`）。`v1.0.0`（X=1）にするのはまだ尚早です。
 - 対応する最低OSを変えるときは、`build-mac.sh` の `min_macos` と `LSMinimumSystemVersion`、`README.md`、`REQUIREMENT.md` を揃えてください。
 - ビルド後は `vtool -show-build` で、両方のアーキテクチャの `minos` が対応OSになっているか確認してください。
 

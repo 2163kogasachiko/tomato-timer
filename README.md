@@ -4,7 +4,12 @@
 
 ## ダウンロード
 
-Mac版アプリは、このリポジトリの **Releases** にある最新リリースの `TomatoTimer-Mac-vX.Y.zip` をダウンロードしてください。ZIPを展開して `TomatoTimer.app` を開きます。
+このリポジトリの **Releases** にある最新リリースからダウンロードしてください。
+
+- **macOS**: `TomatoTimer_X.Y_aarch64.dmg`（Apple Silicon）。開いて `TomatoTimer.app` をアプリケーションフォルダへ
+- **Windows**: `TomatoTimer_X.Y_x64-setup.exe`（インストーラー）または `TomatoTimer-Windows-vX.Y.exe`（単体）
+
+旧Swift版の `TomatoTimer-Mac-vX.Y.zip` も同じ Releases にあります。
 
 未署名のアプリのため、初回起動時に「壊れているため開けません」「開発者を確認できません」と表示されることがあります。その場合は `TomatoTimer.app` をアプリケーションフォルダなどに移動したあと、ターミナルで次を実行してください。
 
