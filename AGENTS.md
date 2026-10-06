@@ -21,6 +21,7 @@
 | `REQUIREMENT.md` | 仕様 | 仕様を変えたら更新する |
 | `README.md` | 利用者向けの説明 | |
 | `AGENTS.md` | このファイル | |
+| `tauri/` | Tauri による Windows/macOS マルチプラットフォーム化の試作 | 本実装ではありません。詳しくは `tauri/README.md`。トマト画像は描画の仮画像です |
 
 ### リポジトリにないファイル
 

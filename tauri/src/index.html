@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>トマトタイマー (Tauri試作)</title>
+<style>
+  :root {
+    --cream: rgb(255, 245, 219);
+    --primary-red: rgb(184, 31, 26);
+  }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+  }
+  /* 420x430 のデザイン空間をウィンドウサイズに合わせて等比拡縮する */
+  #stage {
+    position: absolute;
+    width: 420px;
+    height: 430px;
+    transform-origin: center center;
+    left: 50%;
+    top: 50%;
+  }
+  #tomato {
+    position: absolute;
+    left: 10px;
+    top: 15px;
+    width: 400px;
+    height: 400px;
+    /* 影はトマト画像だけに付ける（ウィンドウ自体には付けない） */
+    filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.16));
+    -webkit-user-drag: none;
+    cursor: grab;
+  }
+  #tomato:active { cursor: grabbing; }
+
+  .face {
+    position: absolute;
+    left: 45px;
+    top: 15px;
+    width: 330px;
+    height: 400px;
+    color: var(--cream);
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  .face .spacer { height: 124px; }
+  .phase {
+    font-size: 17px;
+    font-weight: bold;
+  }
+  .clock {
+    margin-top: 1px;
+    font-size: 68px;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+  }
+  .progress {
+    width: 205px;
+    height: 4px;
+    margin: 7px auto 0;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress > div {
+    height: 100%;
+    width: 0%;
+    background: var(--cream);
+    border-radius: 2px;
+  }
+  .actions {
+    margin-top: 17px;
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+  }
+  .btn {
+    width: 112px;
+    height: 39px;
+    border: none;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.05s;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn.primary {
+    background: var(--cream);
+    color: var(--primary-red);
+  }
+  .btn.secondary {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  }
+  .phases {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 13px;
+  }
+  .phases button {
+    background: none;
+    border: none;
+    color: var(--cream);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    opacity: 0.65;
+    padding: 0 0 4px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+    position: relative;
+  }
+  .phases button.active {
+    font-weight: bold;
+    opacity: 1;
+  }
+  .phases button.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--cream);
+  }
+  .counter {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  /* 左上の独自信号ボタン */
+  .lights {
+    position: absolute;
+    left: 21px;
+    top: 32px;
+    display: flex;
+    gap: 8px;
+  }
+  .lights button {
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lights .close { background: rgb(255, 97, 89); color: rgb(107, 20, 15); }
+  .lights .min   { background: rgb(255, 199, 71); color: rgb(122, 82, 10); }
+
+  /* 右上の歯車（プロトタイプでは未実装のプレースホルダー） */
+  .gear {
+    position: absolute;
+    left: 312px;
+    top: 123px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--cream);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <img id="tomato" src="tomato-placeholder.png" alt="">
+    <div class="face">
+      <div class="spacer"></div>
+      <div class="phase" id="phase">作業</div>
+      <div class="clock" id="clock">25:00</div>
+      <div class="progress"><div id="progressFill"></div></div>
+      <div class="actions">
+        <button class="btn primary" id="toggle">開始</button>
+        <button class="btn secondary" id="reset">リセット</button>
+      </div>
+      <div class="phases">
+        <button data-phase="focus" class="active">作業</button>
+        <button data-phase="shortBreak">短い休憩</button>
+        <button data-phase="longBreak">長い休憩</button>
+      </div>
+      <div class="counter" id="counter">完了した作業&nbsp;&nbsp;0 / 4</div>
+    </div>
+    <div class="lights">
+      <button class="close" id="closeBtn" aria-label="アプリを終了">✕</button>
+      <button class="min" id="minBtn" aria-label="ウィンドウをしまう">–</button>
+    </div>
+    <button class="gear" id="gearBtn" aria-label="設定">⚙</button>
+  </div>
+
+  <audio id="snd-chime" src="timer-chime.wav" preload="auto"></audio>
+  <audio id="snd-beeps" src="timer-beeps.wav" preload="auto"></audio>
+  <audio id="snd-toy-march" src="timer-toy-march.wav" preload="auto"></audio>
+  <audio id="snd-bell" src="timer-bell.wav" preload="auto"></audio>
+
+<script>
+const PHASES = {
+  focus:      { label: "作業",     minutes: 25 },
+  shortBreak: { label: "短い休憩", minutes: 5 },
+  longBreak:  { label: "長い休憩", minutes: 15 },
+};
+// プロトタイプでは通知音は初期値「ド・ミ・ソ」固定
+const SOUNDS = { focusStart: "snd-chime", breakStart: "snd-chime", breakEnd: "snd-chime" };
+
+let phase = "focus";
+let remaining = PHASES[phase].minutes * 60;   // 表示用の残り秒
+let running = false;
+let completed = 0;
+let deadline = 0;
+let remainingExact = null;                    // 一時停止時の秒未満込みの残り
+let ticker = null;
+
+const $ = (id) => document.getElementById(id);
+const duration = () => PHASES[phase].minutes * 60;
+
+function playSound(key) {
+  const el = $(SOUNDS[key]);
+  if (!el) return beepFallback();
+  el.currentTime = 0;
+  el.play().catch(beepFallback);
+}
+
+function beepFallback() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(); osc.stop(ctx.currentTime + 0.4);
+  } catch (_) { /* 音が出せなくても続行 */ }
+}
+
+function render() {
+  $("phase").textContent = PHASES[phase].label;
+  $("clock").textContent =
+    String(Math.floor(remaining / 60)).padStart(2, "0") + ":" +
+    String(remaining % 60).padStart(2, "0");
+  $("progressFill").style.width = ((1 - remaining / duration()) * 100) + "%";
+  $("toggle").textContent = running ? "一時停止" : "開始";
+  $("counter").innerHTML = "完了した作業&nbsp;&nbsp;" + completed + " / 4";
+  document.querySelectorAll(".phases button").forEach(b =>
+    b.classList.toggle("active", b.dataset.phase === phase));
+}
+
+function tick() {
+  remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  if (remaining === 0) return finish();
+  render();
+}
+
+function start() {
+  deadline = Date.now() + (remainingExact ?? remaining) * 1000;
+  remainingExact = null;
+  running = true;
+  ticker = setInterval(tick, 250);
+}
+
+function toggle() {
+  if (running) {
+    remainingExact = (deadline - Date.now()) / 1000;
+    clearInterval(ticker); ticker = null;
+    remaining = Math.max(0, Math.ceil(remainingExact));
+    running = false;
+    render();
+  } else {
+    playSound(phase === "focus" ? "focusStart" : "breakStart");
+    start();
+    render();
+  }
+}
+
+function reset() {
+  clearInterval(ticker); ticker = null;
+  deadline = 0; remainingExact = null;
+  running = false;
+  remaining = duration();
+  render();
+}
+
+function selectPhase(p) {
+  phase = p;
+  reset();
+}
+
+function finish() {
+  clearInterval(ticker); ticker = null;
+  running = false;
+  const finished = phase;
+  if (finished === "focus") {
+    completed += 1;
+    phase = completed % 4 === 0 ? "longBreak" : "shortBreak";
+    playSound("breakStart");
+  } else {
+    phase = "focus";
+    if (finished === "longBreak") completed %= 4;
+    playSound("breakEnd");
+  }
+  remaining = duration();
+  start();
+  render();
+}
+
+// --- ウィンドウ操作 ---
+const appWindow = window.__TAURI__.window.getCurrentWindow();
+
+$("toggle").addEventListener("click", toggle);
+$("reset").addEventListener("click", reset);
+document.querySelectorAll(".phases button").forEach(b =>
+  b.addEventListener("click", () => selectPhase(b.dataset.phase)));
+$("closeBtn").addEventListener("click", () => appWindow.close());
+$("minBtn").addEventListener("click", () => appWindow.minimize());
+$("gearBtn").addEventListener("click", () => { /* 設定画面はプロトタイプでは未実装 */ });
+
+// トマト画像のドラッグでウィンドウ移動（ボタン類の上では発動しない）
+$("tomato").addEventListener("mousedown", (e) => {
+  if (e.button === 0) appWindow.startDragging();
+});
+
+// --- 等比スケーリング ---
+function fit() {
+  const scale = Math.min(window.innerWidth / 420, window.innerHeight / 430);
+  $("stage").style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+window.addEventListener("resize", fit);
+fit();
+render();
+</script>
+</body>
+</html>
