@@ -99,9 +99,28 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Generate release notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREV="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -1 || true)"
+          {
+            echo "## What's Changed"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty='- %s' "${PREV}..${TAG}"
+            else
+              git log --no-merges --pretty='- %s' "${TAG}"
+            fi
+          } > release-notes.md
+          cat release-notes.md
 
       - name: Collect release files
         run: |
@@ -115,5 +134,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: TomatoTimer ${{ github.ref_name }}
+          body_path: release-notes.md
           files: release/*
-          generate_release_notes: true

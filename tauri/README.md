@@ -43,7 +43,7 @@ npm run build                 # リリースビルド
 
 ### GitHub Release
 
-`vX.Y` 形式のタグを push すると、両 OS のビルド成功後に GitHub Release `TomatoTimer vX.Y` が自動作成され、単体 exe・NSIS インストーラー・dmg が添付されます。
+`vX.Y` 形式のタグを push すると、両 OS のビルド成功後に GitHub Release `TomatoTimer vX.Y` が自動作成され、単体 exe・NSIS インストーラー・dmg が添付されます。リリースノートは直前の `v*` タグからのコミット一覧から自動生成されます。
 
 ```bash
 # src-tauri/tauri.conf.json の version を上げてコミットしてから
