@@ -5,7 +5,7 @@ import AVFoundation
 @MainActor
 final class TimerModel: ObservableObject {
     enum Phase: String { case focus = "作業", shortBreak = "短い休憩", longBreak = "長い休憩" }
-    enum SoundEvent { case breakStart, breakEnd }
+    enum SoundEvent { case focusStart, breakStart, breakEnd }
     enum SoundChoice: String, CaseIterable, Identifiable {
         case chime, beeps, toyMarch, bell
 
@@ -35,12 +35,14 @@ final class TimerModel: ObservableObject {
     @Published var focusMinutes = UserDefaults.standard.object(forKey: "focusMinutes") as? Int ?? 25
     @Published var shortBreakMinutes = UserDefaults.standard.object(forKey: "shortBreakMinutes") as? Int ?? 5
     @Published var longBreakMinutes = UserDefaults.standard.object(forKey: "longBreakMinutes") as? Int ?? 15
+    @Published var focusStartSound = SoundChoice(rawValue: UserDefaults.standard.string(forKey: "focusStartSound") ?? "") ?? .chime
     @Published var breakStartSound = SoundChoice(rawValue: UserDefaults.standard.string(forKey: "breakStartSound") ?? "") ?? .chime
     @Published var breakEndSound = SoundChoice(rawValue: UserDefaults.standard.string(forKey: "breakEndSound") ?? "") ?? .chime
     @Published var showSettings = false
     var dragStart: NSPoint?
 
     private var deadline: Date?
+    private var remainingExact: TimeInterval?
     private var ticker: Timer?
     private var audioPlayer: AVAudioPlayer?
     private var notificationPanel: NSPanel?
@@ -66,17 +68,20 @@ final class TimerModel: ObservableObject {
             let previousPhase = phase
             tick()
             guard phase == previousPhase else { return }
+            if let deadline { remainingExact = deadline.timeIntervalSinceNow }
             ticker?.invalidate()
             ticker = nil
             deadline = nil
             running = false
         } else {
+            playSound(phase == .focus ? focusStartSound : breakStartSound)
             start()
         }
     }
 
     private func start() {
-        deadline = Date().addingTimeInterval(TimeInterval(remaining))
+        deadline = Date().addingTimeInterval(remainingExact ?? TimeInterval(remaining))
+        remainingExact = nil
         running = true
         ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -97,6 +102,9 @@ final class TimerModel: ObservableObject {
 
     func setSound(_ choice: SoundChoice, for event: SoundEvent) {
         switch event {
+        case .focusStart:
+            focusStartSound = choice
+            UserDefaults.standard.set(choice.rawValue, forKey: "focusStartSound")
         case .breakStart:
             breakStartSound = choice
             UserDefaults.standard.set(choice.rawValue, forKey: "breakStartSound")
@@ -110,6 +118,7 @@ final class TimerModel: ObservableObject {
         ticker?.invalidate()
         ticker = nil
         deadline = nil
+        remainingExact = nil
         running = false
         remaining = duration
     }
@@ -151,6 +160,9 @@ final class TimerModel: ObservableObject {
             phase = completedFocus.isMultiple(of: 4) ? .longBreak : .shortBreak
         } else {
             phase = .focus
+            if finished == .longBreak {
+                completedFocus %= 4
+            }
         }
         remaining = duration
         playSound(finished == .focus ? breakStartSound : breakEndSound)
@@ -186,6 +198,10 @@ final class TimerModel: ObservableObject {
         icon.imageScaling = .scaleProportionallyUpOrDown
         if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png") {
             icon.image = NSImage(contentsOfFile: path)
+        } else {
+            let renderer = ImageRenderer(content: DrawnTomato().frame(width: 62, height: 62))
+            renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+            icon.image = renderer.nsImage
         }
         background.addSubview(icon)
 
@@ -333,6 +349,28 @@ struct LeafShape: Shape {
     }
 }
 
+struct DrawnTomato: View {
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                TomatoShape()
+                    .fill(LinearGradient(colors: [
+                        Color(red: 0.96, green: 0.33, blue: 0.26),
+                        Color(red: 0.78, green: 0.12, blue: 0.10)
+                    ], startPoint: .top, endPoint: .bottom))
+                LeafShape()
+                    .fill(LinearGradient(colors: [
+                        Color(red: 0.35, green: 0.62, blue: 0.30),
+                        Color(red: 0.20, green: 0.45, blue: 0.20)
+                    ], startPoint: .top, endPoint: .bottom))
+                    .frame(width: geometry.size.width * 0.425,
+                           height: geometry.size.height * 0.275)
+                    .offset(y: -geometry.size.height * 0.355)
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var timer = TimerModel()
     private let cream = Color(red: 1, green: 0.96, blue: 0.86)
@@ -349,24 +387,7 @@ struct ContentView: View {
 
     private var timerFace: some View {
         ZStack {
-            if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png"),
-               let photo = NSImage(contentsOfFile: path) {
-                Image(nsImage: photo)
-                    .resizable()
-                    .frame(width: 400, height: 400)
-                    .shadow(color: .black.opacity(0.16), radius: 12, y: 7)
-                    .gesture(
-                        DragGesture(minimumDistance: 4)
-                            .onChanged { value in
-                                guard let window = mainWindow() else { return }
-                                if timer.dragStart == nil { timer.dragStart = window.frame.origin }
-                                guard let start = timer.dragStart else { return }
-                                window.setFrameOrigin(NSPoint(x: start.x + value.translation.width,
-                                                              y: start.y - value.translation.height))
-                            }
-                            .onEnded { _ in timer.dragStart = nil }
-                    )
-            }
+            tomatoBackground
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 124)
@@ -455,12 +476,13 @@ struct ContentView: View {
                 durationStepper("短い休憩", .shortBreak, range: 1...60)
                 durationStepper("長い休憩", .longBreak, range: 1...60)
                 Divider()
+                soundPicker("作業開始の音", .focusStart)
                 soundPicker("休憩開始の音", .breakStart)
                 soundPicker("休憩終了の音", .breakEnd)
                 Text("変更中のタイマーはリセットされます。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("バージョン 2.9")
+                Text("バージョン \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "開発版")")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -472,6 +494,33 @@ struct ContentView: View {
             .padding(24)
             .frame(width: 380)
         }
+    }
+
+    private var tomatoBackground: some View {
+        Group {
+            if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png"),
+               let photo = NSImage(contentsOfFile: path) {
+                Image(nsImage: photo)
+                    .resizable()
+            } else {
+                DrawnTomato()
+            }
+        }
+        .frame(width: 400, height: 400)
+        .shadow(color: .black.opacity(0.16), radius: 12, y: 7)
+        .gesture(windowDrag)
+    }
+
+    private var windowDrag: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                guard let window = mainWindow() else { return }
+                if timer.dragStart == nil { timer.dragStart = window.frame.origin }
+                guard let start = timer.dragStart else { return }
+                window.setFrameOrigin(NSPoint(x: start.x + value.translation.width,
+                                              y: start.y - value.translation.height))
+            }
+            .onEnded { _ in timer.dragStart = nil }
     }
 
     private func mainWindow() -> NSWindow? {
@@ -553,6 +602,7 @@ struct WindowConfigurator: NSViewRepresentable {
         guard let window else { return }
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.hasShadow = false
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = false
@@ -566,6 +616,7 @@ struct WindowConfigurator: NSViewRepresentable {
     }
 }
 
+@MainActor
 final class TomatoAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png"),
@@ -592,7 +643,7 @@ struct TomatoTimerApp: App {
     @NSApplicationDelegateAdaptor(TomatoAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
+        Window("トマトタイマー", id: "main") {
             ContentView()
         }
         .windowStyle(.hiddenTitleBar)
