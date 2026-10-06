@@ -151,6 +151,9 @@ final class TimerModel: ObservableObject {
             phase = completedFocus.isMultiple(of: 4) ? .longBreak : .shortBreak
         } else {
             phase = .focus
+            if finished == .longBreak {
+                completedFocus %= 4
+            }
         }
         remaining = duration
         playSound(finished == .focus ? breakStartSound : breakEndSound)
@@ -349,24 +352,7 @@ struct ContentView: View {
 
     private var timerFace: some View {
         ZStack {
-            if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png"),
-               let photo = NSImage(contentsOfFile: path) {
-                Image(nsImage: photo)
-                    .resizable()
-                    .frame(width: 400, height: 400)
-                    .shadow(color: .black.opacity(0.16), radius: 12, y: 7)
-                    .gesture(
-                        DragGesture(minimumDistance: 4)
-                            .onChanged { value in
-                                guard let window = mainWindow() else { return }
-                                if timer.dragStart == nil { timer.dragStart = window.frame.origin }
-                                guard let start = timer.dragStart else { return }
-                                window.setFrameOrigin(NSPoint(x: start.x + value.translation.width,
-                                                              y: start.y - value.translation.height))
-                            }
-                            .onEnded { _ in timer.dragStart = nil }
-                    )
-            }
+            tomatoBackground
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 124)
@@ -474,6 +460,50 @@ struct ContentView: View {
         }
     }
 
+    private var tomatoBackground: some View {
+        Group {
+            if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png"),
+               let photo = NSImage(contentsOfFile: path) {
+                Image(nsImage: photo)
+                    .resizable()
+            } else {
+                drawnTomato
+            }
+        }
+        .frame(width: 400, height: 400)
+        .shadow(color: .black.opacity(0.16), radius: 12, y: 7)
+        .gesture(windowDrag)
+    }
+
+    private var drawnTomato: some View {
+        ZStack {
+            TomatoShape()
+                .fill(LinearGradient(colors: [
+                    Color(red: 0.96, green: 0.33, blue: 0.26),
+                    Color(red: 0.78, green: 0.12, blue: 0.10)
+                ], startPoint: .top, endPoint: .bottom))
+            LeafShape()
+                .fill(LinearGradient(colors: [
+                    Color(red: 0.35, green: 0.62, blue: 0.30),
+                    Color(red: 0.20, green: 0.45, blue: 0.20)
+                ], startPoint: .top, endPoint: .bottom))
+                .frame(width: 170, height: 110)
+                .offset(y: -142)
+        }
+    }
+
+    private var windowDrag: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                guard let window = mainWindow() else { return }
+                if timer.dragStart == nil { timer.dragStart = window.frame.origin }
+                guard let start = timer.dragStart else { return }
+                window.setFrameOrigin(NSPoint(x: start.x + value.translation.width,
+                                              y: start.y - value.translation.height))
+            }
+            .onEnded { _ in timer.dragStart = nil }
+    }
+
     private func mainWindow() -> NSWindow? {
         NSApp.windows.first { $0.identifier?.rawValue == "TomatoTimerMainWindow" } ?? NSApp.keyWindow
     }
@@ -567,6 +597,7 @@ struct WindowConfigurator: NSViewRepresentable {
     }
 }
 
+@MainActor
 final class TomatoAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png"),
