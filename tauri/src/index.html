@@ -283,7 +283,7 @@
 </head>
 <body>
   <div id="stage">
-    <img id="tomato" src="tomato-placeholder.png" alt="">
+    <img id="tomato" src="tomato.png" onerror="this.onerror=null;this.src='tomato-placeholder.png'" alt="">
     <div class="face">
       <div class="spacer"></div>
       <div class="phase" id="phase">作業</div>
@@ -349,166 +349,69 @@
     </div>
   </div>
 
-  <audio id="snd-chime" src="timer-chime.wav" preload="auto"></audio>
-  <audio id="snd-beeps" src="timer-beeps.wav" preload="auto"></audio>
-  <audio id="snd-toy-march" src="timer-toy-march.wav" preload="auto"></audio>
-  <audio id="snd-bell" src="timer-bell.wav" preload="auto"></audio>
-
 <script>
+// バックエンド（Rust）がタイマー状態を管理する。フロントは描画とコマンド送信だけを行う。
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+
 const PHASES = {
-  focus:      { label: "作業",     minKey: "focusMinutes",      range: [1, 180], def: 25 },
-  shortBreak: { label: "短い休憩", minKey: "shortBreakMinutes", range: [1, 60],  def: 5 },
-  longBreak:  { label: "長い休憩", minKey: "longBreakMinutes",  range: [1, 60],  def: 15 },
+  focus:      { minKey: "focusMinutes",      range: [1, 180] },
+  shortBreak: { minKey: "shortBreakMinutes", range: [1, 60] },
+  longBreak:  { minKey: "longBreakMinutes",  range: [1, 60] },
 };
 const SOUND_CHOICES = {
-  chime:    { title: "ド・ミ・ソ",                 el: "snd-chime" },
-  beeps:    { title: "ピピピピ",                   el: "snd-beeps" },
-  toyMarch: { title: "おもちゃ風マーチ（オリジナル）", el: "snd-toy-march" },
-  bell:     { title: "やさしいベル",               el: "snd-bell" },
+  chime:    "ド・ミ・ソ",
+  beeps:    "ピピピピ",
+  toyMarch: "おもちゃ風マーチ（オリジナル）",
+  bell:     "やさしいベル",
 };
 const SOUND_EVENTS = ["focusStart", "breakStart", "breakEnd"];
 
-// UserDefaults 相当の永続化（localStorage）
-const settings = {
-  focusMinutes:       +(localStorage.getItem("focusMinutes") ?? 25),
-  shortBreakMinutes:  +(localStorage.getItem("shortBreakMinutes") ?? 5),
-  longBreakMinutes:   +(localStorage.getItem("longBreakMinutes") ?? 15),
-  focusStartSound:    localStorage.getItem("focusStartSound") || "chime",
-  breakStartSound:    localStorage.getItem("breakStartSound") || "chime",
-  breakEndSound:      localStorage.getItem("breakEndSound") || "chime",
-};
-
-let phase = "focus";
-let remaining = settings[PHASES[phase].minKey] * 60;   // 表示用の残り秒
-let running = false;
-let completed = 0;
-let deadline = 0;
-let remainingExact = null;                    // 一時停止時の秒未満込みの残り
-let ticker = null;
-
 const $ = (id) => document.getElementById(id);
-const duration = () => settings[PHASES[phase].minKey] * 60;
+let lastState = null;
 
-function playSound(eventOrChoice) {
-  const choice = SOUND_EVENTS.includes(eventOrChoice)
-    ? settings[eventOrChoice + "Sound"]
-    : eventOrChoice;
-  const el = $(SOUND_CHOICES[choice]?.el);
-  if (!el) return beepFallback();
-  el.currentTime = 0;
-  el.play().catch(beepFallback);
-}
-
-function beepFallback() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start(); osc.stop(ctx.currentTime + 0.4);
-  } catch (_) { /* 音が出せなくても続行 */ }
-}
-
-function render() {
-  $("phase").textContent = PHASES[phase].label;
+function render(s) {
+  lastState = s;
+  $("phase").textContent = s.phaseLabel;
   $("clock").textContent =
-    String(Math.floor(remaining / 60)).padStart(2, "0") + ":" +
-    String(remaining % 60).padStart(2, "0");
-  $("progressFill").style.width = ((1 - remaining / duration()) * 100) + "%";
-  $("toggle").textContent = running ? "一時停止" : "開始";
-  $("counter").innerHTML = "完了した作業&nbsp;&nbsp;" + completed + " / 4";
+    String(Math.floor(s.remaining / 60)).padStart(2, "0") + ":" +
+    String(s.remaining % 60).padStart(2, "0");
+  $("progressFill").style.width = (s.progress * 100) + "%";
+  $("toggle").textContent = s.running ? "一時停止" : "開始";
+  $("counter").innerHTML = "完了した作業&nbsp;&nbsp;" + s.completedFocus + " / 4";
   document.querySelectorAll(".phases button").forEach(b =>
-    b.classList.toggle("active", b.dataset.phase === phase));
-}
-
-function tick() {
-  remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-  if (remaining === 0) return finish();
-  render();
-}
-
-function start() {
-  deadline = Date.now() + (remainingExact ?? remaining) * 1000;
-  remainingExact = null;
-  running = true;
-  ticker = setInterval(tick, 250);
-}
-
-function toggle() {
-  if (running) {
-    remainingExact = (deadline - Date.now()) / 1000;
-    clearInterval(ticker); ticker = null;
-    remaining = Math.max(0, Math.ceil(remainingExact));
-    running = false;
-    render();
-  } else {
-    playSound(phase === "focus" ? "focusStart" : "breakStart");
-    start();
-    render();
+    b.classList.toggle("active", b.dataset.phase === s.phase));
+  // 設定シートの表示もスナップショットに同期する
+  for (const [p, cfg] of Object.entries(PHASES)) {
+    $("min-" + p).textContent = s[cfg.minKey] + "分";
+  }
+  for (const ev of SOUND_EVENTS) {
+    const sel = $("sound-" + ev);
+    if (document.activeElement !== sel) sel.value = s[ev + "Sound"];
   }
 }
 
-function reset() {
-  clearInterval(ticker); ticker = null;
-  deadline = 0; remainingExact = null;
-  running = false;
-  remaining = duration();
-  render();
-}
-
-function selectPhase(p) {
-  phase = p;
-  reset();
-}
-
-function finish() {
-  clearInterval(ticker); ticker = null;
-  running = false;
-  const finished = phase;
-  if (finished === "focus") {
-    completed += 1;
-    phase = completed % 4 === 0 ? "longBreak" : "shortBreak";
-    playSound("breakStart");
-  } else {
-    phase = "focus";
-    if (finished === "longBreak") completed %= 4;
-    playSound("breakEnd");
-  }
-  remaining = duration();
-  start();
-  render();
-}
+invoke("get_state").then(render);
+listen("timer-state", (e) => render(e.payload));
 
 // --- ウィンドウ操作 ---
 const appWindow = window.__TAURI__.window.getCurrentWindow();
 
-$("toggle").addEventListener("click", toggle);
-$("reset").addEventListener("click", reset);
+$("toggle").addEventListener("click", () => invoke("toggle"));
+$("reset").addEventListener("click", () => invoke("reset"));
 document.querySelectorAll(".phases button").forEach(b =>
-  b.addEventListener("click", () => selectPhase(b.dataset.phase)));
+  b.addEventListener("click", () => invoke("select_phase", { phase: b.dataset.phase })));
 $("closeBtn").addEventListener("click", () => appWindow.close());
 $("minBtn").addEventListener("click", () => appWindow.minimize());
 
 // --- 設定シート ---
-function renderSettings() {
-  for (const [p, cfg] of Object.entries(PHASES)) {
-    $("min-" + p).textContent = settings[cfg.minKey] + "分";
-  }
-}
-
 for (const ev of SOUND_EVENTS) {
   const sel = $("sound-" + ev);
-  for (const [value, c] of Object.entries(SOUND_CHOICES)) {
-    sel.add(new Option(c.title, value));
+  for (const [value, title] of Object.entries(SOUND_CHOICES)) {
+    sel.add(new Option(title, value));
   }
-  sel.value = settings[ev + "Sound"];
-  sel.addEventListener("change", () => {
-    settings[ev + "Sound"] = sel.value;
-    localStorage.setItem(ev + "Sound", sel.value);
-  });
+  sel.addEventListener("change", () =>
+    invoke("set_sound", { event: ev, sound: sel.value }));
 }
 
 document.querySelectorAll(".stepper").forEach(stepper => {
@@ -516,21 +419,19 @@ document.querySelectorAll(".stepper").forEach(stepper => {
   const cfg = PHASES[p];
   stepper.querySelectorAll("button").forEach(btn => {
     btn.addEventListener("click", () => {
-      const next = settings[cfg.minKey] + +btn.dataset.dir;
+      if (!lastState) return;
+      const next = lastState[cfg.minKey] + +btn.dataset.dir;
       if (next < cfg.range[0] || next > cfg.range[1]) return;
-      settings[cfg.minKey] = next;
-      localStorage.setItem(cfg.minKey, String(next));
-      renderSettings();
-      if (phase === p) reset();
+      invoke("set_minutes", { phase: p, minutes: next });
     });
   });
 });
 
 document.querySelectorAll(".preview").forEach(btn =>
-  btn.addEventListener("click", () => playSound(btn.dataset.sound)));
+  btn.addEventListener("click", () =>
+    invoke("preview_sound", { sound: $("sound-" + btn.dataset.sound).value })));
 
 $("gearBtn").addEventListener("click", () => {
-  renderSettings();
   $("sheetBackdrop").hidden = false;
 });
 $("sheetDone").addEventListener("click", () => {
@@ -555,7 +456,6 @@ function fit() {
 }
 window.addEventListener("resize", fit);
 fit();
-render();
 </script>
 </body>
 </html>

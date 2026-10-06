@@ -1,38 +1,45 @@
-# Tauri プロトタイプ
+# Tauri 版トマトタイマー
 
-Windows / macOS マルチプラットフォーム化の可否を検証するための試作です。本実装ではありません。
+Tauri v2 による macOS / Windows マルチプラットフォーム版です。こちらが本体の実装です（リポジトリ直下の `TomatoTimer.swift` は旧macOS専用のレガシー実装）。
 
-検証の主眼は「透過・飾りなしウィンドウにトマト画像を表示する」見た目が Windows の WebView2 でも成立するかの確認です。
+## 構成
 
-## 内容
+- `src-tauri/src/lib.rs` — タイマーのロジック（フェーズ遷移・終了時刻基準の計時・完了数）、Tauri コマンド、通知ウィンドウの生成、音声再生（rodio）、設定の保存（`settings.json`）
+  - 計時は Rust 側スレッドが駆動します。ウィンドウを最小化・遮蔽してフロントエンドがスロットルされても残り時間はずれません
+  - 音声も専用スレッドで鳴らします（rodio の型が Send/Sync でないため）
+  - macOS のみ、通知ウィンドウに `collectionBehavior` を設定する小さな objc シムあり（全スペース＋フルスクリーン上・非アクティブ表示のため）
+- `src/index.html` — メイン画面。`get_state` / `timer-state` イベントで状態を受け取って描画し、ボタン操作はコマンドを invoke するだけ
+- `src/notification.html` — 通知パネル。起動時に `get_notification` コマンドで表示内容を取得
+- `src/tomato.png` — トマト画像（git 管理外。`scripts/prepare-tomato.sh` が生成）
+- `src/tomato-placeholder.png` — 描画トマトの仮画像（git 管理）
+- `src-tauri/assets/timer-*.wav` — 通知音。`include_bytes!` でバイナリに埋め込み
 
-- `src/index.html` — 透過ウィンドウ上のトマト＋タイマー画面。ドラッグ移動、独自の閉じる/最小化ボタン、開始/一時停止/リセット、フェーズ切り替え、通知音、設定シート（分数・通知音・試聴、localStorage に永続化）
-- `src-tauri/` — Tauri v2。`transparent: true` / `decorations: false` / `shadow: false` / 最小サイズ 300×310
-- タイマーはフロントエンドの JS で動く簡易版（本実装ではスロットリング対策として Rust 側で駆動する想定）
-
-## 注意
-
-- `src/tomato-placeholder.png` は `DrawnTomato` を再現した描画トマトです。許諾画像（Adobe Stock 577240549）は使っていません。このビルドは配布しないでください
-- 通知パネルは未実装です
-
-## ローカルで試す
+## 開発
 
 ```bash
 cd tauri
 npm install
-npm run dev      # 開発起動
-npm run build    # リリースビルド
+./scripts/prepare-tomato.sh   # 初回のみ（仮画像を配置）
+npm run dev                   # 開発起動
+npm run build                 # リリースビルド
 ```
 
-Windows では Rust（rustup）と Node.js が必要です。WebView2 は Windows 11 標準搭載です。
+## トマト画像
 
-## CI の成果物で試す（実機にツールを入れなくてよい）
+許諾済みの画像（Adobe Stock 577240549）はリポジトリに含めません。
 
-`feat/tauri-proto` ブランチへの push、または Actions タブからの手動実行で `Build Tauri prototype` が走ります。完了したら Artifacts から：
+- `./scripts/prepare-tomato.sh /path/to/image.png` — 中央正方形に切り抜いて `src/tomato.png` を生成
+- `./scripts/prepare-tomato.sh`（引数なし） — `tomato.png` が無ければ仮画像をコピー
+- 配布ビルドは `./build-release.sh /path/to/licensed-tomato.png`（画像→アイコン→`npm run build`、version と git タグの一致も確認）
+- `tomato.png` が無い場合は表示側が仮画像にフォールバックします
 
-- `tomato-timer-tauri-windows-exe` — 単体 exe（未署名のため SmartScreen が出ます。「詳細情報」→「実行」）
-- `tomato-timer-tauri-windows-nsis` — NSIS インストーラー
-- `tomato-timer-tauri-macos-dmg` — macOS 用 dmg（Apple Silicon）
+## CI
+
+`.github/workflows/tauri-build.yml` が `main` / `feat/**` への push で Windows（単体exe・NSIS）と macOS（dmg）をビルドします。仮画像入り・未署名の検証用ビルドで、配布には使いません。
+
+- `tomato-timer-windows-exe` — 単体 exe（SmartScreen →「詳細情報」→「実行」）
+- `tomato-timer-windows-nsis` — NSIS インストーラー
+- `tomato-timer-macos-dmg` — macOS dmg（Apple Silicon）
 
 macOS 版は未署名のため、ブラウザでダウンロードした dmg から起動すると「壊れているため開けません」と出ます。対処は次のどれかです。
 
@@ -40,10 +47,8 @@ macOS 版は未署名のため、ブラウザでダウンロードした dmg か
 - `gh run download` や `curl` など CLI でダウンロードする（quarantine が付かず、そのまま開けます）
 - `npm run build` でローカルビルドする
 
-## Windows で確認したいこと
+## 残っている差分・既知の制約
 
-- 透明な背景の上にトマトだけが見えるか（白背景や黒縁が出ないか）
-- リサイズ時にチラつき・残像・境界のアーティファクトが出ないか
-- トマトのドラッグでウィンドウが移動するか
-- 独自の閉じる/最小化ボタンが効くか
-- DPI の異なるディスプレイ間の移動で表示が崩れないか
+- Windows の通知パネルは表示時にフォーカスを取る可能性があります（macOS 側は `orderFrontRegardless` で非アクティブ化済み）
+- 通知パネルの表示位置はプライマリディスプレイ基準です
+- 完了した作業数は再起動で0に戻ります（保存しません。本家と同じ）

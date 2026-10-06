@@ -6,7 +6,8 @@ dist/
 tomato-cutout.png
 TomatoTimer.icns
 
-# Tauri プロトタイプ
+# Tauri
 tauri/node_modules/
 tauri/src-tauri/target/
 tauri/src-tauri/gen/
+tauri/src/tomato.png

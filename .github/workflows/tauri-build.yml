@@ -1,9 +1,9 @@
-name: Build Tauri prototype
+name: Build Tauri app
 
 on:
   push:
-    branches: [feat/tauri-proto]
-    paths: [tauri/**, .github/workflows/tauri-proto-build.yml]
+    branches: [main, "feat/**"]
+    paths: [tauri/**, .github/workflows/tauri-build.yml]
   workflow_dispatch:
 
 jobs:
@@ -22,20 +22,24 @@ jobs:
       - name: Install frontend deps
         run: npm install
 
+      - name: Prepare placeholder tomato image
+        run: bash scripts/prepare-tomato.sh
+        shell: bash
+
       - name: Build (NSIS installer)
         run: npm run build -- --bundles nsis
 
       - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
-          name: tomato-timer-tauri-windows-nsis
+          name: tomato-timer-windows-nsis
           path: tauri/src-tauri/target/release/bundle/nsis/*.exe
 
       - name: Upload standalone exe
         uses: actions/upload-artifact@v4
         with:
-          name: tomato-timer-tauri-windows-exe
-          path: tauri/src-tauri/target/release/tomato-timer-tauri-proto.exe
+          name: tomato-timer-windows-exe
+          path: tauri/src-tauri/target/release/tomato-timer.exe
 
   build-macos:
     runs-on: macos-latest
@@ -52,11 +56,15 @@ jobs:
       - name: Install frontend deps
         run: npm install
 
+      - name: Prepare placeholder tomato image
+        run: bash scripts/prepare-tomato.sh
+        shell: bash
+
       - name: Build (dmg)
         run: npm run build -- --bundles dmg
 
       - name: Upload dmg
         uses: actions/upload-artifact@v4
         with:
-          name: tomato-timer-tauri-macos-dmg
+          name: tomato-timer-macos-dmg
           path: tauri/src-tauri/target/release/bundle/dmg/*.dmg
