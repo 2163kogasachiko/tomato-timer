@@ -6,7 +6,7 @@
 
 トマトの写真をウィンドウそのものとして表示する、macOS用のポモドーロタイマーです。
 
-- 対応OS: macOS 13以降
+- 対応OS: macOS 13以降（Apple シリコン、Intel の両方）
 - 構成: SwiftUI / AppKit / AVFoundation の単一ファイルアプリ
 - 表示言語: 日本語のみ
 
@@ -107,7 +107,7 @@
 
 `build-mac.sh` が次のものを作ります。
 
-- `TomatoTimer.app`（バンドルID `com.codex.tomatotimer`、アドホック署名）
+- `TomatoTimer.app`（バンドルID `com.codex.tomatotimer`、arm64 と x86_64 の Universal、最低OS macOS 13、アドホック署名）
 - `dist/TomatoTimer-Mac-v<バージョン>.zip`
 
 トマト画像（Adobe Stock、アセットID 577240549）はリポジトリに含めません。ビルド時に指定した画像を中央で正方形に切り抜き、1254×1254 に縮小して `tomato-cutout.png` と `TomatoTimer.icns` を作ります。
@@ -120,3 +120,5 @@
 - トマト画像が見つからないと、背景が表示されず、ウィンドウも移動できません。
 - `TomatoShape` と `LeafShape` は定義されていますが、どこからも使われていません。
 - バージョン番号が `build-mac.sh` と `TomatoTimer.swift` の設定画面の両方に直接書かれています。
+- 背景を透明にしたウィンドウでも、四角い輪郭と影がトマトの周りに表示されます。
+- Swift 6 の言語モードでは、`TomatoAppDelegate.mainWindowClosed` でメインアクターに関する警告が出ます。

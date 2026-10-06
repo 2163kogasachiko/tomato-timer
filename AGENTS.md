@@ -16,7 +16,7 @@
 | ファイル | 役割 | 備考 |
 | --- | --- | --- |
 | `TomatoTimer.swift` | タイマーのロジック（`TimerModel`）、画面（`ContentView`）、ウィンドウ設定、アプリの起動処理 | |
-| `build-mac.sh` | 画像の加工、`Info.plist` の生成、コンパイル、署名、zip化 | |
+| `build-mac.sh` | 画像の加工、`Info.plist` の生成、コンパイル、署名、zip化 | arm64 と x86_64 を macOS 13 向けに別々にビルドし、`lipo` で Universal にまとめる |
 | `timer-chime.wav` / `timer-beeps.wav` / `timer-toy-march.wav` / `timer-bell.wav` | 通知音 | オリジナル音源。ファイル名は `TimerModel.SoundChoice.fileName` と対応 |
 | `REQUIREMENT.md` | 仕様 | 仕様を変えたら更新する |
 | `README.md` | 利用者向けの説明 | |
@@ -50,6 +50,8 @@ macOS 13以降、Xcode Command Line Tools、Python 3、Pillowが必要です。
   - `build-mac.sh` の `CFBundleShortVersionString`、`CFBundleVersion`、zip ファイル名
   - `TomatoTimer.swift` の設定画面のバージョン表示
   - `README.md` のダウンロード名と出力先
+- 対応する最低OSを変えるときは、`build-mac.sh` の `min_macos` と `LSMinimumSystemVersion`、`README.md`、`REQUIREMENT.md` を揃えてください。
+- ビルド後は `vtool -show-build` で、両方のアーキテクチャの `minos` が対応OSになっているか確認してください。
 
 ## Git
 

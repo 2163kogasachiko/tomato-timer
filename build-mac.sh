@@ -58,11 +58,17 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 
-CLANG_MODULE_CACHE_PATH="$temp_dir/.clang-cache" \
-SWIFT_MODULE_CACHE_PATH="$temp_dir/.swift-cache" \
-xcrun swiftc -O -parse-as-library "$repo_dir/TomatoTimer.swift" \
-  -o "$app_path/Contents/MacOS/TomatoTimer" \
-  -framework SwiftUI -framework AppKit -framework AVFoundation
+min_macos="13.0"
+for arch in arm64 x86_64; do
+  CLANG_MODULE_CACHE_PATH="$temp_dir/.clang-cache" \
+  SWIFT_MODULE_CACHE_PATH="$temp_dir/.swift-cache" \
+  xcrun swiftc -O -parse-as-library "$repo_dir/TomatoTimer.swift" \
+    -target "$arch-apple-macos$min_macos" \
+    -o "$temp_dir/TomatoTimer-$arch" \
+    -framework SwiftUI -framework AppKit -framework AVFoundation
+done
+lipo -create "$temp_dir"/TomatoTimer-arm64 "$temp_dir"/TomatoTimer-x86_64 \
+  -output "$app_path/Contents/MacOS/TomatoTimer"
 
 codesign --force --deep --sign - "$app_path"
 ditto -c -k --sequesterRsrc --keepParent "$app_path" "$build_dir/TomatoTimer-Mac-v2.9.zip"
