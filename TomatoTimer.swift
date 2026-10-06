@@ -5,7 +5,7 @@ import AVFoundation
 @MainActor
 final class TimerModel: ObservableObject {
     enum Phase: String { case focus = "作業", shortBreak = "短い休憩", longBreak = "長い休憩" }
-    enum SoundEvent { case breakStart, breakEnd }
+    enum SoundEvent { case focusStart, breakStart, breakEnd }
     enum SoundChoice: String, CaseIterable, Identifiable {
         case chime, beeps, toyMarch, bell
 
@@ -35,6 +35,7 @@ final class TimerModel: ObservableObject {
     @Published var focusMinutes = UserDefaults.standard.object(forKey: "focusMinutes") as? Int ?? 25
     @Published var shortBreakMinutes = UserDefaults.standard.object(forKey: "shortBreakMinutes") as? Int ?? 5
     @Published var longBreakMinutes = UserDefaults.standard.object(forKey: "longBreakMinutes") as? Int ?? 15
+    @Published var focusStartSound = SoundChoice(rawValue: UserDefaults.standard.string(forKey: "focusStartSound") ?? "") ?? .chime
     @Published var breakStartSound = SoundChoice(rawValue: UserDefaults.standard.string(forKey: "breakStartSound") ?? "") ?? .chime
     @Published var breakEndSound = SoundChoice(rawValue: UserDefaults.standard.string(forKey: "breakEndSound") ?? "") ?? .chime
     @Published var showSettings = false
@@ -71,6 +72,7 @@ final class TimerModel: ObservableObject {
             deadline = nil
             running = false
         } else {
+            playSound(phase == .focus ? focusStartSound : breakStartSound)
             start()
         }
     }
@@ -97,6 +99,9 @@ final class TimerModel: ObservableObject {
 
     func setSound(_ choice: SoundChoice, for event: SoundEvent) {
         switch event {
+        case .focusStart:
+            focusStartSound = choice
+            UserDefaults.standard.set(choice.rawValue, forKey: "focusStartSound")
         case .breakStart:
             breakStartSound = choice
             UserDefaults.standard.set(choice.rawValue, forKey: "breakStartSound")
@@ -441,6 +446,7 @@ struct ContentView: View {
                 durationStepper("短い休憩", .shortBreak, range: 1...60)
                 durationStepper("長い休憩", .longBreak, range: 1...60)
                 Divider()
+                soundPicker("作業開始の音", .focusStart)
                 soundPicker("休憩開始の音", .breakStart)
                 soundPicker("休憩終了の音", .breakEnd)
                 Text("変更中のタイマーはリセットされます。")
