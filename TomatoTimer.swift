@@ -42,6 +42,7 @@ final class TimerModel: ObservableObject {
     var dragStart: NSPoint?
 
     private var deadline: Date?
+    private var remainingExact: TimeInterval?
     private var ticker: Timer?
     private var audioPlayer: AVAudioPlayer?
     private var notificationPanel: NSPanel?
@@ -67,6 +68,7 @@ final class TimerModel: ObservableObject {
             let previousPhase = phase
             tick()
             guard phase == previousPhase else { return }
+            if let deadline { remainingExact = deadline.timeIntervalSinceNow }
             ticker?.invalidate()
             ticker = nil
             deadline = nil
@@ -78,7 +80,8 @@ final class TimerModel: ObservableObject {
     }
 
     private func start() {
-        deadline = Date().addingTimeInterval(TimeInterval(remaining))
+        deadline = Date().addingTimeInterval(remainingExact ?? TimeInterval(remaining))
+        remainingExact = nil
         running = true
         ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -115,6 +118,7 @@ final class TimerModel: ObservableObject {
         ticker?.invalidate()
         ticker = nil
         deadline = nil
+        remainingExact = nil
         running = false
         remaining = duration
     }
@@ -194,6 +198,10 @@ final class TimerModel: ObservableObject {
         icon.imageScaling = .scaleProportionallyUpOrDown
         if let path = Bundle.main.path(forResource: "tomato-cutout", ofType: "png") {
             icon.image = NSImage(contentsOfFile: path)
+        } else {
+            let renderer = ImageRenderer(content: DrawnTomato().frame(width: 62, height: 62))
+            renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+            icon.image = renderer.nsImage
         }
         background.addSubview(icon)
 
@@ -341,6 +349,28 @@ struct LeafShape: Shape {
     }
 }
 
+struct DrawnTomato: View {
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                TomatoShape()
+                    .fill(LinearGradient(colors: [
+                        Color(red: 0.96, green: 0.33, blue: 0.26),
+                        Color(red: 0.78, green: 0.12, blue: 0.10)
+                    ], startPoint: .top, endPoint: .bottom))
+                LeafShape()
+                    .fill(LinearGradient(colors: [
+                        Color(red: 0.35, green: 0.62, blue: 0.30),
+                        Color(red: 0.20, green: 0.45, blue: 0.20)
+                    ], startPoint: .top, endPoint: .bottom))
+                    .frame(width: geometry.size.width * 0.425,
+                           height: geometry.size.height * 0.275)
+                    .offset(y: -geometry.size.height * 0.355)
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var timer = TimerModel()
     private let cream = Color(red: 1, green: 0.96, blue: 0.86)
@@ -473,29 +503,12 @@ struct ContentView: View {
                 Image(nsImage: photo)
                     .resizable()
             } else {
-                drawnTomato
+                DrawnTomato()
             }
         }
         .frame(width: 400, height: 400)
         .shadow(color: .black.opacity(0.16), radius: 12, y: 7)
         .gesture(windowDrag)
-    }
-
-    private var drawnTomato: some View {
-        ZStack {
-            TomatoShape()
-                .fill(LinearGradient(colors: [
-                    Color(red: 0.96, green: 0.33, blue: 0.26),
-                    Color(red: 0.78, green: 0.12, blue: 0.10)
-                ], startPoint: .top, endPoint: .bottom))
-            LeafShape()
-                .fill(LinearGradient(colors: [
-                    Color(red: 0.35, green: 0.62, blue: 0.30),
-                    Color(red: 0.20, green: 0.45, blue: 0.20)
-                ], startPoint: .top, endPoint: .bottom))
-                .frame(width: 170, height: 110)
-                .offset(y: -142)
-        }
     }
 
     private var windowDrag: some Gesture {
@@ -630,7 +643,7 @@ struct TomatoTimerApp: App {
     @NSApplicationDelegateAdaptor(TomatoAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
+        Window("トマトタイマー", id: "main") {
             ContentView()
         }
         .windowStyle(.hiddenTitleBar)
