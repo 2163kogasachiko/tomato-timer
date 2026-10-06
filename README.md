@@ -6,6 +6,12 @@
 
 Mac版アプリは、このリポジトリの **Releases** にある最新リリースの `TomatoTimer-Mac-vX.Y.zip` をダウンロードしてください。ZIPを展開して `TomatoTimer.app` を開きます。
 
+未署名のアプリのため、初回起動時に「壊れているため開けません」「開発者を確認できません」と表示されることがあります。その場合は `TomatoTimer.app` をアプリケーションフォルダなどに移動したあと、ターミナルで次を実行してください。
+
+```bash
+xattr -dr com.apple.quarantine /Applications/TomatoTimer.app
+```
+
 ## 主な機能
 
 - 作業、短い休憩、長い休憩の時間設定

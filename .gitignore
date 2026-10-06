@@ -5,3 +5,9 @@ dist/
 *.zip
 tomato-cutout.png
 TomatoTimer.icns
+
+# Tauri
+tauri/node_modules/
+tauri/src-tauri/target/
+tauri/src-tauri/gen/
+tauri/src/tomato.png

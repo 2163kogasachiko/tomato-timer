@@ -15,12 +15,18 @@
 
 | ファイル | 役割 | 備考 |
 | --- | --- | --- |
-| `TomatoTimer.swift` | タイマーのロジック（`TimerModel`）、画面（`ContentView`）、ウィンドウ設定、アプリの起動処理 | |
-| `build-mac.sh` | 画像の加工、`Info.plist` の生成、コンパイル、署名、zip化 | arm64 と x86_64 を macOS 13 向けに別々にビルドし、`lipo` で Universal にまとめる |
-| `timer-chime.wav` / `timer-beeps.wav` / `timer-toy-march.wav` / `timer-bell.wav` | 通知音 | オリジナル音源。ファイル名は `TimerModel.SoundChoice.fileName` と対応 |
+| `TomatoTimer.swift` | 旧macOS専用実装（タイマー・画面・ウィンドウ設定・起動処理） | レガシー。新規開発は `tauri/` 側です |
+| `build-mac.sh` | 旧macOS専用ビルド（画像加工、`Info.plist`、コンパイル、署名、zip化） | レガシー。arm64/x86_64 を `lipo` で Universal にまとめる。Tauri 版は `tauri/build-release.sh` |
+| `timer-chime.wav` / `timer-beeps.wav` / `timer-toy-march.wav` / `timer-bell.wav` | 通知音（旧Swift版用） | オリジナル音源。Tauri版は `tauri/src-tauri/assets/` の複製を使います。音を追加・変更するときは両方を揃えてください |
 | `REQUIREMENT.md` | 仕様 | 仕様を変えたら更新する |
 | `README.md` | 利用者向けの説明 | |
 | `AGENTS.md` | このファイル | |
+| `tauri/` | Tauri v2 版アプリ本体（macOS / Windows） | 詳しくは `tauri/README.md` |
+| `tauri/src-tauri/src/lib.rs` | タイマーのロジック、コマンド、通知ウィンドウ、音声再生、設定の保存 | |
+| `tauri/src/index.html` | メイン画面 | |
+| `tauri/src/notification.html` | 通知パネル | |
+| `tauri/scripts/prepare-tomato.sh` | `tauri/src/tomato.png` の生成（許諾画像の切り抜き or 仮画像） | |
+| `tauri/build-release.sh` | 配布ビルド（画像→アイコン→`npm run build`） | |
 
 ### リポジトリにないファイル
 
@@ -32,6 +38,28 @@
 
 ## ビルド
 
+### Tauri 版（本体）
+
+Rust（rustup）、Node.js、npm が必要です。開発中は：
+
+```bash
+cd tauri
+npm install
+./scripts/prepare-tomato.sh   # 初回のみ（仮画像が入ります）
+npm run dev                   # 開発起動
+```
+
+配布ビルドは許諾済みの画像を指定します。`tauri.conf.json` の `version` が git タグと一致している必要があります。
+
+```bash
+cd tauri
+./build-release.sh /path/to/licensed-tomato.png
+```
+
+出力は `tauri/src-tauri/target/release/bundle/` 以下です。Windows 向けは Windows 機上で同じ手順を実行するか、GitHub Actions（`tauri-build.yml`）の成果物を使います（仮画像・未署名のため検証用）。
+
+### 旧macOS専用ビルド（レガシー）
+
 macOS 13以降、Xcode Command Line Tools、Python 3、Pillowが必要です。
 
 ```bash
@@ -40,13 +68,13 @@ macOS 13以降、Xcode Command Line Tools、Python 3、Pillowが必要です。
 
 出力は `dist/TomatoTimer-Mac-v<バージョン>.zip` です。
 
-許諾済みの画像が手元にない場合は、仮画像でビルドして動作確認してもかまいません。ただし、その zip は配布に使わず、仮画像であることを報告してください。
+許諾済みの画像が手元にない場合は、仮画像でビルドして動作確認してもかまいません。ただし、その成果物は配布に使わず、仮画像であることを報告してください。
 
 ## 変更するときの注意
 
 - 仕様が変わる変更では、`REQUIREMENT.md` も同じコミットで更新してください。
 - 通知音を追加・変更するときは、wav ファイルと `TimerModel.SoundChoice` の両方を揃えてください。`build-mac.sh` は `timer-*.wav` をまとめてコピーします。
-- バージョンは git タグ（`vX.Y` 形式、GitHub Releases と対応）で管理します。リリース時はタグを打ってから `build-mac.sh` を実行してください。`CFBundleShortVersionString` と zip ファイル名はタグから、`CFBundleVersion` はビルド時刻から自動生成され、設定画面の表示は `Info.plist` から読むため、ソースやスクリプトを手で書き換える箇所はありません。
+- バージョンは git タグ（`vX.Y` 形式、GitHub Releases と対応）が正です。Tauri 版は `tauri/src-tauri/tauri.conf.json` の `version` をタグに合わせてコミットします（`build-release.sh` が一致を確認します）。旧 `build-mac.sh` はタグから `Info.plist` と zip 名を自動生成します。
 - 対応する最低OSを変えるときは、`build-mac.sh` の `min_macos` と `LSMinimumSystemVersion`、`README.md`、`REQUIREMENT.md` を揃えてください。
 - ビルド後は `vtool -show-build` で、両方のアーキテクチャの `minos` が対応OSになっているか確認してください。
 

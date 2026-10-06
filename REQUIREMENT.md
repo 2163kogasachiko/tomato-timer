@@ -1,14 +1,15 @@
 # トマトタイマー 仕様
 
-バージョン 2.9 時点の仕様です。実装は `TomatoTimer.swift` にあります。仕様を変えるときは、このファイルも合わせて更新してください。
+仕様を変えるときは、このファイルも合わせて更新してください。
 
 ## 概要
 
-トマトの写真をウィンドウそのものとして表示する、macOS用のポモドーロタイマーです。
+トマトの写真をウィンドウそのものとして表示するポモドーロタイマーです。
 
-- 対応OS: macOS 13以降（Apple シリコン、Intel の両方）
-- 構成: SwiftUI / AppKit / AVFoundation の単一ファイルアプリ
+- 対応OS: macOS 13以降（Apple シリコン、Intel）、Windows 10 / 11（WebView2。Windows 11 は標準搭載、Windows 10 ではインストーラーが導入します）
+- 構成: Tauri v2。タイマー・通知・音声・設定保存は Rust 側（`tauri/src-tauri/src/lib.rs`）、画面は HTML/CSS/JS（`tauri/src/`）
 - 表示言語: 日本語のみ
+- 以前の macOS 専用ネイティブ実装（`TomatoTimer.swift` + `build-mac.sh`）も残っていますが、今後の開発は Tauri 版が本体です
 
 ## タイマー
 
@@ -29,7 +30,7 @@
 
 ### 計時
 
-- 終了時刻を基準に、0.25秒ごとに残り時間を計算し直します。スリープなどで処理が遅れても、残り時間はずれません。
+- 終了時刻を基準に、Rust 側のスレッドが0.25秒ごとに残り時間を計算し直します。スリープや、ウィンドウを最小化してフロントエンドが間引かれても、残り時間はずれません。
 - 表示は `MM:SS` 形式です。
 
 ### 自動切り替え
@@ -43,15 +44,15 @@
 
 ## 通知
 
-フェーズが終わると、通知音を鳴らし、画面右上に独自の通知パネルを出します。macOSの通知センターは使いません。
+フェーズが終わると、通知音を鳴らし、画面右上に独自の通知パネルを出します。OSの通知機能は使いません。
 
 | 終わったフェーズ | 見出し | 本文 | 通知音 |
 | --- | --- | --- | --- |
 | 作業 | 作業おつかれさま！ | 次は（短い休憩／長い休憩）です。 | 休憩開始の音 |
 | 休憩 | 休憩終了！ | 作業を始めましょう。 | 休憩終了の音 |
 
-- 通知パネルにはトマト画像を表示します。画像がバンドルにないときは、描画したトマトを表示します。
-- すべてのスペースとフルスクリーンの上に表示し、アプリをアクティブにしません。
+- 通知パネルにはトマト画像を表示します。
+- macOS ではすべてのスペースとフルスクリーンの上に表示し、アプリをアクティブにしません（小さなネイティブシムで実現）。Windows では最前面の枠なしウィンドウとして表示します。
 - 6秒後に自動で閉じます。次の通知が出ると、前の通知は閉じます。
 
 ### 通知音
@@ -65,7 +66,7 @@
 | おもちゃ風マーチ（オリジナル） | `timer-toy-march.wav` |
 | やさしいベル | `timer-bell.wav` |
 
-音声ファイルが読めないときや再生に失敗したときは、システムのビープ音を鳴らします。
+音声のデコードや再生に失敗したときは、880Hz のビープ音を鳴らします。
 
 ## 設定
 
@@ -79,7 +80,7 @@
 
 ### 保存する値
 
-`UserDefaults` に保存し、次回起動時に読み込みます。
+アプリの設定フォルダにある `settings.json` に保存し、次回起動時に読み込みます。
 
 | キー | 内容 |
 | --- | --- |
@@ -111,12 +112,21 @@
 
 ## 配布物
 
-`build-mac.sh` が次のものを作ります。
+### リリースビルド（ローカル）
 
-- `TomatoTimer.app`（バンドルID `com.codex.tomatotimer`、arm64 と x86_64 の Universal、最低OS macOS 13、アドホック署名）
-- `dist/TomatoTimer-Mac-v<バージョン>.zip`
+`tauri/build-release.sh /path/to/licensed-tomato.png` を実行すると、画像の切り抜きとアイコン生成を行ってから `npm run build` します。出力は `tauri/src-tauri/target/release/bundle/` 以下です。macOS では `.app` / `.dmg`、Windows では Windows 機上で同じ手順を実行して `.msi` / `.exe`（NSIS）を作ります。
 
-バージョン番号は GitHub Releases に対応する git タグ（`v2.9` など）が正です。`build-mac.sh` がタグから `CFBundleShortVersionString` と zip ファイル名を決め、`CFBundleVersion` にはビルド時刻（`YYYYMMDDhhmm`）を入れます。設定画面のバージョン表示は `Info.plist` から読み込みます。
+バージョン番号は GitHub Releases に対応する git タグ（`v2.9` など）が正です。`tauri/src-tauri/tauri.conf.json` の `version` をタグに合わせてから実行してください（スクリプトが一致を確認します）。
 
-トマト画像（Adobe Stock、アセットID 577240549）はリポジトリに含めません。ビルド時に指定した画像を中央で正方形に切り抜き、1254×1254 に縮小して `tomato-cutout.png` と `TomatoTimer.icns` を作ります。
+### CI の検証用ビルド
+
+GitHub Actions（`.github/workflows/tauri-build.yml`）が `main` と `feat/**` ブランチへの push ごとに Windows（単体exe / NSIS）と macOS（dmg）をビルドします。仮の描画トマト入りなので配布には使いません。未署名のため、Windows では SmartScreen、macOS では quarantine の警告が出ます。
+
+### トマト画像
+
+トマト画像（Adobe Stock、アセットID 577240549）はリポジトリに含めません。`tauri/scripts/prepare-tomato.sh` が指定画像を中央で正方形に切り抜き、1254×1254 に縮小して `tauri/src/tomato.png` を作り、`npx tauri icon` がアイコン一式を作ります。画像が未指定のときは `tomato-placeholder.png`（描画トマト）が使われます。
+
+### 以前のmacOS専用ビルド
+
+`build-mac.sh` で `TomatoTimer.app`（Universal、アドホック署名）と `dist/TomatoTimer-Mac-v<バージョン>.zip` を作る旧来の方法も残っています。
 

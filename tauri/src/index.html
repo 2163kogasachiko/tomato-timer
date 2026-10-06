@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>トマトタイマー (Tauri試作)</title>
+<style>
+  :root {
+    --cream: rgb(255, 245, 219);
+    --primary-red: rgb(184, 31, 26);
+  }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+  }
+  /* 420x430 のデザイン空間をウィンドウサイズに合わせて等比拡縮する */
+  #stage {
+    position: absolute;
+    width: 420px;
+    height: 430px;
+    transform-origin: center center;
+    left: 50%;
+    top: 50%;
+  }
+  #tomato {
+    position: absolute;
+    left: 10px;
+    top: 15px;
+    width: 400px;
+    height: 400px;
+    /* 影はトマト画像だけに付ける（ウィンドウ自体には付けない） */
+    filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.16));
+    -webkit-user-drag: none;
+    cursor: grab;
+  }
+  #tomato:active { cursor: grabbing; }
+
+  .face {
+    position: absolute;
+    left: 45px;
+    top: 15px;
+    width: 330px;
+    height: 400px;
+    color: var(--cream);
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  .face .spacer { height: 124px; }
+  .phase {
+    font-size: 17px;
+    font-weight: bold;
+  }
+  .clock {
+    margin-top: 1px;
+    font-size: 68px;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+  }
+  .progress {
+    width: 205px;
+    height: 4px;
+    margin: 7px auto 0;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress > div {
+    height: 100%;
+    width: 0%;
+    background: var(--cream);
+    border-radius: 2px;
+  }
+  .actions {
+    margin-top: 17px;
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+  }
+  .btn {
+    width: 112px;
+    height: 39px;
+    border: none;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.05s;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn.primary {
+    background: var(--cream);
+    color: var(--primary-red);
+  }
+  .btn.secondary {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  }
+  .phases {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 13px;
+  }
+  .phases button {
+    background: none;
+    border: none;
+    color: var(--cream);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    opacity: 0.65;
+    padding: 0 0 4px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+    position: relative;
+  }
+  .phases button.active {
+    font-weight: bold;
+    opacity: 1;
+  }
+  .phases button.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--cream);
+  }
+  .counter {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  /* 左上の独自信号ボタン */
+  .lights {
+    position: absolute;
+    left: 21px;
+    top: 32px;
+    display: flex;
+    gap: 8px;
+  }
+  .lights button {
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lights .close { background: rgb(255, 97, 89); color: rgb(107, 20, 15); }
+  .lights .min   { background: rgb(255, 199, 71); color: rgb(122, 82, 10); }
+
+  /* 右上の歯車 */
+  .gear {
+    position: absolute;
+    left: 312px;
+    top: 123px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--cream);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 設定シート（macOS のシートに相当するオーバーレイ） */
+  .sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sheet-backdrop[hidden] { display: none; }
+  .sheet {
+    width: 372px;
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 18px;
+    padding: 22px 24px;
+    color: #333;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    font-size: 14px;
+  }
+  .sheet h2 {
+    margin: 0 0 14px;
+    font-size: 20px;
+  }
+  .sheet .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+  }
+  .sheet .row label { white-space: nowrap; }
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stepper button {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stepper span {
+    min-width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .sheet hr {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 10px 0;
+  }
+  .sheet select {
+    font-size: 13px;
+    max-width: 200px;
+  }
+  .sheet .preview {
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    padding: 2px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .sheet .note {
+    margin: 10px 0 4px;
+    font-size: 12px;
+    color: #777;
+  }
+  .sheet .version {
+    margin: 0;
+    font-size: 11px;
+    color: #999;
+  }
+  .sheet .done-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+  .sheet .done {
+    border: none;
+    border-radius: 6px;
+    background: var(--primary-red);
+    color: #fff;
+    padding: 5px 18px;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <img id="tomato" src="tomato.png" onerror="this.onerror=null;this.src='tomato-placeholder.png'" alt="">
+    <div class="face">
+      <div class="spacer"></div>
+      <div class="phase" id="phase">作業</div>
+      <div class="clock" id="clock">25:00</div>
+      <div class="progress"><div id="progressFill"></div></div>
+      <div class="actions">
+        <button class="btn primary" id="toggle">開始</button>
+        <button class="btn secondary" id="reset">リセット</button>
+      </div>
+      <div class="phases">
+        <button data-phase="focus" class="active">作業</button>
+        <button data-phase="shortBreak">短い休憩</button>
+        <button data-phase="longBreak">長い休憩</button>
+      </div>
+      <div class="counter" id="counter">完了した作業&nbsp;&nbsp;0 / 4</div>
+    </div>
+    <div class="lights">
+      <button class="close" id="closeBtn" aria-label="アプリを終了">✕</button>
+      <button class="min" id="minBtn" aria-label="ウィンドウをしまう">–</button>
+    </div>
+    <button class="gear" id="gearBtn" aria-label="設定">⚙</button>
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden>
+      <div class="sheet">
+        <h2>タイマーの設定</h2>
+        <div class="row">
+          <label>作業</label>
+          <div class="stepper" data-phase="focus">
+            <button data-dir="-1">−</button><span id="min-focus">25分</span><button data-dir="1">＋</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>短い休憩</label>
+          <div class="stepper" data-phase="shortBreak">
+            <button data-dir="-1">−</button><span id="min-shortBreak">5分</span><button data-dir="1">＋</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>長い休憩</label>
+          <div class="stepper" data-phase="longBreak">
+            <button data-dir="-1">−</button><span id="min-longBreak">15分</span><button data-dir="1">＋</button>
+          </div>
+        </div>
+        <hr>
+        <div class="row">
+          <label>作業開始の音</label>
+          <select id="sound-focusStart"></select>
+          <button class="preview" data-sound="focusStart">試聴</button>
+        </div>
+        <div class="row">
+          <label>休憩開始の音</label>
+          <select id="sound-breakStart"></select>
+          <button class="preview" data-sound="breakStart">試聴</button>
+        </div>
+        <div class="row">
+          <label>休憩終了の音</label>
+          <select id="sound-breakEnd"></select>
+          <button class="preview" data-sound="breakEnd">試聴</button>
+        </div>
+        <p class="note">変更中のタイマーはリセットされます。</p>
+        <p class="version" id="versionText">バージョン …</p>
+        <div class="done-row"><button class="done" id="sheetDone">完了</button></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// バックエンド（Rust）がタイマー状態を管理する。フロントは描画とコマンド送信だけを行う。
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+
+const PHASES = {
+  focus:      { minKey: "focusMinutes",      range: [1, 180] },
+  shortBreak: { minKey: "shortBreakMinutes", range: [1, 60] },
+  longBreak:  { minKey: "longBreakMinutes",  range: [1, 60] },
+};
+const SOUND_CHOICES = {
+  chime:    "ド・ミ・ソ",
+  beeps:    "ピピピピ",
+  toyMarch: "おもちゃ風マーチ（オリジナル）",
+  bell:     "やさしいベル",
+};
+const SOUND_EVENTS = ["focusStart", "breakStart", "breakEnd"];
+
+const $ = (id) => document.getElementById(id);
+let lastState = null;
+
+function render(s) {
+  lastState = s;
+  $("phase").textContent = s.phaseLabel;
+  $("clock").textContent =
+    String(Math.floor(s.remaining / 60)).padStart(2, "0") + ":" +
+    String(s.remaining % 60).padStart(2, "0");
+  $("progressFill").style.width = (s.progress * 100) + "%";
+  $("toggle").textContent = s.running ? "一時停止" : "開始";
+  $("counter").innerHTML = "完了した作業&nbsp;&nbsp;" + s.completedFocus + " / 4";
+  document.querySelectorAll(".phases button").forEach(b =>
+    b.classList.toggle("active", b.dataset.phase === s.phase));
+  // 設定シートの表示もスナップショットに同期する
+  for (const [p, cfg] of Object.entries(PHASES)) {
+    $("min-" + p).textContent = s[cfg.minKey] + "分";
+  }
+  for (const ev of SOUND_EVENTS) {
+    const sel = $("sound-" + ev);
+    if (document.activeElement !== sel) sel.value = s[ev + "Sound"];
+  }
+}
+
+invoke("get_state").then(render);
+listen("timer-state", (e) => render(e.payload));
+
+// --- ウィンドウ操作 ---
+const appWindow = window.__TAURI__.window.getCurrentWindow();
+
+$("toggle").addEventListener("click", () => invoke("toggle"));
+$("reset").addEventListener("click", () => invoke("reset"));
+document.querySelectorAll(".phases button").forEach(b =>
+  b.addEventListener("click", () => invoke("select_phase", { phase: b.dataset.phase })));
+$("closeBtn").addEventListener("click", () => appWindow.close());
+$("minBtn").addEventListener("click", () => appWindow.minimize());
+
+// --- 設定シート ---
+for (const ev of SOUND_EVENTS) {
+  const sel = $("sound-" + ev);
+  for (const [value, title] of Object.entries(SOUND_CHOICES)) {
+    sel.add(new Option(title, value));
+  }
+  sel.addEventListener("change", () =>
+    invoke("set_sound", { event: ev, sound: sel.value }));
+}
+
+document.querySelectorAll(".stepper").forEach(stepper => {
+  const p = stepper.dataset.phase;
+  const cfg = PHASES[p];
+  stepper.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!lastState) return;
+      const next = lastState[cfg.minKey] + +btn.dataset.dir;
+      if (next < cfg.range[0] || next > cfg.range[1]) return;
+      invoke("set_minutes", { phase: p, minutes: next });
+    });
+  });
+});
+
+document.querySelectorAll(".preview").forEach(btn =>
+  btn.addEventListener("click", () =>
+    invoke("preview_sound", { sound: $("sound-" + btn.dataset.sound).value })));
+
+$("gearBtn").addEventListener("click", () => {
+  $("sheetBackdrop").hidden = false;
+});
+$("sheetDone").addEventListener("click", () => {
+  $("sheetBackdrop").hidden = true;
+});
+$("sheetBackdrop").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.hidden = true;
+});
+window.__TAURI__.app.getVersion().then(v => {
+  $("versionText").textContent = "バージョン " + v;
+});
+
+// トマト画像のドラッグでウィンドウ移動（ボタン類の上では発動しない）
+$("tomato").addEventListener("mousedown", (e) => {
+  if (e.button === 0) appWindow.startDragging();
+});
+
+// --- 等比スケーリング ---
+function fit() {
+  const scale = Math.min(window.innerWidth / 420, window.innerHeight / 430);
+  $("stage").style.transform = `translate(-50%, -50%) scale(${scale})`;
+}
+window.addEventListener("resize", fit);
+fit();
+</script>
+</body>
+</html>
