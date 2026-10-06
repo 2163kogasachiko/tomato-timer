@@ -2,11 +2,33 @@
 
 トマトタイマー（macOS用ポモドーロタイマー）のリポジトリで作業するエージェント向けのメモです。
 
-## 構成
+## 最初に読むファイル
 
-- `TomatoTimer.swift`: アプリ本体（SwiftUI / AppKit / AVFoundation、単一ファイル）
-- `build-mac.sh`: `.app` の組み立て、署名、zip化を行うビルドスクリプト
-- `timer-*.wav`: 通知音（オリジナル音源）
+| ファイル | 内容 | 読むとき |
+| --- | --- | --- |
+| `REQUIREMENT.md` | アプリの仕様と既知の課題 | 機能の追加・変更の前に必ず |
+| `TomatoTimer.swift` | アプリ本体（単一ファイル） | コードを変えるとき |
+| `build-mac.sh` | `.app` の組み立て、署名、zip化 | ビルド、バージョン更新、リソース追加のとき |
+| `README.md` | 利用者向けの説明 | 機能や配布物の説明が変わるとき |
+
+## ファイル一覧
+
+| ファイル | 役割 | 備考 |
+| --- | --- | --- |
+| `TomatoTimer.swift` | タイマーのロジック（`TimerModel`）、画面（`ContentView`）、ウィンドウ設定、アプリの起動処理 | |
+| `build-mac.sh` | 画像の加工、`Info.plist` の生成、コンパイル、署名、zip化 | |
+| `timer-chime.wav` / `timer-beeps.wav` / `timer-toy-march.wav` / `timer-bell.wav` | 通知音 | オリジナル音源。ファイル名は `TimerModel.SoundChoice.fileName` と対応 |
+| `REQUIREMENT.md` | 仕様 | 仕様を変えたら更新する |
+| `README.md` | 利用者向けの説明 | |
+| `AGENTS.md` | このファイル | |
+
+### リポジトリにないファイル
+
+次のファイルはコミットしません（`.gitignore` 済み）。
+
+- トマト画像（Adobe Stock、アセットID 577240549）。ビルド時に引数で渡します。
+- `tomato-cutout.png`、`TomatoTimer.icns`。ビルド時に画像から作られます。
+- `dist/`、`*.app`、`*.zip`。ビルドの出力です。
 
 ## ビルド
 
@@ -16,20 +38,18 @@ macOS 13以降、Xcode Command Line Tools、Python 3、Pillowが必要です。
 ./build-mac.sh /path/to/licensed-tomato.png
 ```
 
-出力は `dist/TomatoTimer-Mac-v<バージョン>.zip` です。`dist/` はコミットしません。
+出力は `dist/TomatoTimer-Mac-v<バージョン>.zip` です。
 
-## 画像の扱い
+許諾済みの画像が手元にない場合は、仮画像でビルドして動作確認してもかまいません。ただし、その zip は配布に使わず、仮画像であることを報告してください。
 
-- Adobe Stockのトマト画像（アセットID: 577240549）はリポジトリに含めません。`tomato-cutout.png` と `TomatoTimer.icns` もコミットしません。
-- 許諾済みの画像が手元にない場合、仮画像でビルドして動作確認してもかまいません。ただし、その zip は配布に使わず、仮画像であることを報告してください。
+## 変更するときの注意
 
-## バージョン更新
-
-バージョンを上げるときは、次の箇所を揃えて変更します。
-
-- `build-mac.sh` の `CFBundleShortVersionString` と `CFBundleVersion`
-- `build-mac.sh` の zip ファイル名
-- `README.md` のダウンロード名と出力先
+- 仕様が変わる変更では、`REQUIREMENT.md` も同じコミットで更新してください。
+- 通知音を追加・変更するときは、wav ファイルと `TimerModel.SoundChoice` の両方を揃えてください。`build-mac.sh` は `timer-*.wav` をまとめてコピーします。
+- バージョンを上げるときは、次の箇所を揃えて変更してください。
+  - `build-mac.sh` の `CFBundleShortVersionString`、`CFBundleVersion`、zip ファイル名
+  - `TomatoTimer.swift` の設定画面のバージョン表示
+  - `README.md` のダウンロード名と出力先
 
 ## Git
 
