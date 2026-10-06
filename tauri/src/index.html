@@ -167,7 +167,7 @@
   .lights .close { background: rgb(255, 97, 89); color: rgb(107, 20, 15); }
   .lights .min   { background: rgb(255, 199, 71); color: rgb(122, 82, 10); }
 
-  /* 右上の歯車（プロトタイプでは未実装のプレースホルダー） */
+  /* 右上の歯車 */
   .gear {
     position: absolute;
     left: 312px;
@@ -183,6 +183,101 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* 設定シート（macOS のシートに相当するオーバーレイ） */
+  .sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sheet-backdrop[hidden] { display: none; }
+  .sheet {
+    width: 372px;
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 18px;
+    padding: 22px 24px;
+    color: #333;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    font-size: 14px;
+  }
+  .sheet h2 {
+    margin: 0 0 14px;
+    font-size: 20px;
+  }
+  .sheet .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+  }
+  .sheet .row label { white-space: nowrap; }
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stepper button {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stepper span {
+    min-width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .sheet hr {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 10px 0;
+  }
+  .sheet select {
+    font-size: 13px;
+    max-width: 200px;
+  }
+  .sheet .preview {
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    padding: 2px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .sheet .note {
+    margin: 10px 0 4px;
+    font-size: 12px;
+    color: #777;
+  }
+  .sheet .version {
+    margin: 0;
+    font-size: 11px;
+    color: #999;
+  }
+  .sheet .done-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+  .sheet .done {
+    border: none;
+    border-radius: 6px;
+    background: var(--primary-red);
+    color: #fff;
+    padding: 5px 18px;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
   }
 </style>
 </head>
@@ -210,6 +305,48 @@
       <button class="min" id="minBtn" aria-label="ウィンドウをしまう">–</button>
     </div>
     <button class="gear" id="gearBtn" aria-label="設定">⚙</button>
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden>
+      <div class="sheet">
+        <h2>タイマーの設定</h2>
+        <div class="row">
+          <label>作業</label>
+          <div class="stepper" data-phase="focus">
+            <button data-dir="-1">−</button><span id="min-focus">25分</span><button data-dir="1">＋</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>短い休憩</label>
+          <div class="stepper" data-phase="shortBreak">
+            <button data-dir="-1">−</button><span id="min-shortBreak">5分</span><button data-dir="1">＋</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>長い休憩</label>
+          <div class="stepper" data-phase="longBreak">
+            <button data-dir="-1">−</button><span id="min-longBreak">15分</span><button data-dir="1">＋</button>
+          </div>
+        </div>
+        <hr>
+        <div class="row">
+          <label>作業開始の音</label>
+          <select id="sound-focusStart"></select>
+          <button class="preview" data-sound="focusStart">試聴</button>
+        </div>
+        <div class="row">
+          <label>休憩開始の音</label>
+          <select id="sound-breakStart"></select>
+          <button class="preview" data-sound="breakStart">試聴</button>
+        </div>
+        <div class="row">
+          <label>休憩終了の音</label>
+          <select id="sound-breakEnd"></select>
+          <button class="preview" data-sound="breakEnd">試聴</button>
+        </div>
+        <p class="note">変更中のタイマーはリセットされます。</p>
+        <p class="version" id="versionText">バージョン …</p>
+        <div class="done-row"><button class="done" id="sheetDone">完了</button></div>
+      </div>
+    </div>
   </div>
 
   <audio id="snd-chime" src="timer-chime.wav" preload="auto"></audio>
@@ -219,15 +356,30 @@
 
 <script>
 const PHASES = {
-  focus:      { label: "作業",     minutes: 25 },
-  shortBreak: { label: "短い休憩", minutes: 5 },
-  longBreak:  { label: "長い休憩", minutes: 15 },
+  focus:      { label: "作業",     minKey: "focusMinutes",      range: [1, 180], def: 25 },
+  shortBreak: { label: "短い休憩", minKey: "shortBreakMinutes", range: [1, 60],  def: 5 },
+  longBreak:  { label: "長い休憩", minKey: "longBreakMinutes",  range: [1, 60],  def: 15 },
 };
-// プロトタイプでは通知音は初期値「ド・ミ・ソ」固定
-const SOUNDS = { focusStart: "snd-chime", breakStart: "snd-chime", breakEnd: "snd-chime" };
+const SOUND_CHOICES = {
+  chime:    { title: "ド・ミ・ソ",                 el: "snd-chime" },
+  beeps:    { title: "ピピピピ",                   el: "snd-beeps" },
+  toyMarch: { title: "おもちゃ風マーチ（オリジナル）", el: "snd-toy-march" },
+  bell:     { title: "やさしいベル",               el: "snd-bell" },
+};
+const SOUND_EVENTS = ["focusStart", "breakStart", "breakEnd"];
+
+// UserDefaults 相当の永続化（localStorage）
+const settings = {
+  focusMinutes:       +(localStorage.getItem("focusMinutes") ?? 25),
+  shortBreakMinutes:  +(localStorage.getItem("shortBreakMinutes") ?? 5),
+  longBreakMinutes:   +(localStorage.getItem("longBreakMinutes") ?? 15),
+  focusStartSound:    localStorage.getItem("focusStartSound") || "chime",
+  breakStartSound:    localStorage.getItem("breakStartSound") || "chime",
+  breakEndSound:      localStorage.getItem("breakEndSound") || "chime",
+};
 
 let phase = "focus";
-let remaining = PHASES[phase].minutes * 60;   // 表示用の残り秒
+let remaining = settings[PHASES[phase].minKey] * 60;   // 表示用の残り秒
 let running = false;
 let completed = 0;
 let deadline = 0;
@@ -235,10 +387,13 @@ let remainingExact = null;                    // 一時停止時の秒未満込�
 let ticker = null;
 
 const $ = (id) => document.getElementById(id);
-const duration = () => PHASES[phase].minutes * 60;
+const duration = () => settings[PHASES[phase].minKey] * 60;
 
-function playSound(key) {
-  const el = $(SOUNDS[key]);
+function playSound(eventOrChoice) {
+  const choice = SOUND_EVENTS.includes(eventOrChoice)
+    ? settings[eventOrChoice + "Sound"]
+    : eventOrChoice;
+  const el = $(SOUND_CHOICES[choice]?.el);
   if (!el) return beepFallback();
   el.currentTime = 0;
   el.play().catch(beepFallback);
@@ -336,7 +491,57 @@ document.querySelectorAll(".phases button").forEach(b =>
   b.addEventListener("click", () => selectPhase(b.dataset.phase)));
 $("closeBtn").addEventListener("click", () => appWindow.close());
 $("minBtn").addEventListener("click", () => appWindow.minimize());
-$("gearBtn").addEventListener("click", () => { /* 設定画面はプロトタイプでは未実装 */ });
+
+// --- 設定シート ---
+function renderSettings() {
+  for (const [p, cfg] of Object.entries(PHASES)) {
+    $("min-" + p).textContent = settings[cfg.minKey] + "分";
+  }
+}
+
+for (const ev of SOUND_EVENTS) {
+  const sel = $("sound-" + ev);
+  for (const [value, c] of Object.entries(SOUND_CHOICES)) {
+    sel.add(new Option(c.title, value));
+  }
+  sel.value = settings[ev + "Sound"];
+  sel.addEventListener("change", () => {
+    settings[ev + "Sound"] = sel.value;
+    localStorage.setItem(ev + "Sound", sel.value);
+  });
+}
+
+document.querySelectorAll(".stepper").forEach(stepper => {
+  const p = stepper.dataset.phase;
+  const cfg = PHASES[p];
+  stepper.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const next = settings[cfg.minKey] + +btn.dataset.dir;
+      if (next < cfg.range[0] || next > cfg.range[1]) return;
+      settings[cfg.minKey] = next;
+      localStorage.setItem(cfg.minKey, String(next));
+      renderSettings();
+      if (phase === p) reset();
+    });
+  });
+});
+
+document.querySelectorAll(".preview").forEach(btn =>
+  btn.addEventListener("click", () => playSound(btn.dataset.sound)));
+
+$("gearBtn").addEventListener("click", () => {
+  renderSettings();
+  $("sheetBackdrop").hidden = false;
+});
+$("sheetDone").addEventListener("click", () => {
+  $("sheetBackdrop").hidden = true;
+});
+$("sheetBackdrop").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.hidden = true;
+});
+window.__TAURI__.app.getVersion().then(v => {
+  $("versionText").textContent = "バージョン " + v;
+});
 
 // トマト画像のドラッグでウィンドウ移動（ボタン類の上では発動しない）
 $("tomato").addEventListener("mousedown", (e) => {

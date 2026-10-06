@@ -1,4 +1,4 @@
-name: Build Tauri prototype (Windows)
+name: Build Tauri prototype
 
 on:
   push:
@@ -36,3 +36,27 @@ jobs:
         with:
           name: tomato-timer-tauri-windows-exe
           path: tauri/src-tauri/target/release/tomato-timer-tauri-proto.exe
+
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install frontend deps
+        run: npm install
+
+      - name: Build (dmg)
+        run: npm run build -- --bundles dmg
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomato-timer-tauri-macos-dmg
+          path: tauri/src-tauri/target/release/bundle/dmg/*.dmg
